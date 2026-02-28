@@ -57,7 +57,6 @@ function reducer(state: GameState, action: Action): GameState {
       const { row, col } = action;
       const cell = state.board[row][col];
       if (cell.isRevealed) return state;
-
       const wasIdle = state.status === "idle";
       const newBoard = toggleFlag(state.board, row, col);
       const delta = newBoard[row][col].isFlagged ? 1 : -1;
@@ -78,7 +77,6 @@ function reducer(state: GameState, action: Action): GameState {
       let board = state.board;
       let status = state.status;
 
-      // First click — place mines and compute adjacency
       if (status === "idle") {
         const { mines } = DIFFICULTIES[state.difficulty];
         board = placeMines(board, mines, row, col);
@@ -88,7 +86,6 @@ function reducer(state: GameState, action: Action): GameState {
 
       board = revealCell(board, row, col);
 
-      // Check loss: revealed a mine
       if (board[row][col].isMine) {
         return {
           ...state,
@@ -98,7 +95,6 @@ function reducer(state: GameState, action: Action): GameState {
         };
       }
 
-      // Check win
       const { mines } = DIFFICULTIES[state.difficulty];
       if (checkWin(board, mines)) {
         return { ...state, board, status: "won" };
@@ -112,7 +108,6 @@ function reducer(state: GameState, action: Action): GameState {
       const { row, col } = action;
       const board = chordReveal(state.board, row, col);
 
-      // Check if any mine was revealed during chord
       for (let r = 0; r < board.length; r++) {
         for (let c = 0; c < board[r].length; c++) {
           if (board[r][c].isMine && board[r][c].isRevealed) {
@@ -141,6 +136,12 @@ function reducer(state: GameState, action: Action): GameState {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const DIFFICULTY_LABELS: Record<Difficulty, string> = {
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+  expert: "Expert",
+};
+
 export default function Game() {
   const [state, dispatch] = useReducer(reducer, makeInitialState("beginner"));
   const [isMouseDown, setIsMouseDown] = useState(false);
@@ -161,51 +162,55 @@ export default function Game() {
     };
   }, [state.status]);
 
-  const handleReveal = useCallback((row: number, col: number) => {
-    dispatch({ type: "REVEAL", row, col });
-  }, []);
-
-  const handleFlag = useCallback((row: number, col: number) => {
-    dispatch({ type: "FLAG", row, col });
-  }, []);
-
-  const handleChord = useCallback((row: number, col: number) => {
-    dispatch({ type: "CHORD", row, col });
-  }, []);
-
-  const handleNewGame = useCallback(() => {
-    dispatch({ type: "NEW_GAME" });
-  }, []);
-
-  const handleSetDifficulty = useCallback((difficulty: Difficulty) => {
-    dispatch({ type: "SET_DIFFICULTY", difficulty });
-  }, []);
+  const handleReveal = useCallback(
+    (row: number, col: number) => dispatch({ type: "REVEAL", row, col }),
+    []
+  );
+  const handleFlag = useCallback(
+    (row: number, col: number) => dispatch({ type: "FLAG", row, col }),
+    []
+  );
+  const handleChord = useCallback(
+    (row: number, col: number) => dispatch({ type: "CHORD", row, col }),
+    []
+  );
+  const handleNewGame = useCallback(() => dispatch({ type: "NEW_GAME" }), []);
+  const handleSetDifficulty = useCallback(
+    (difficulty: Difficulty) =>
+      dispatch({ type: "SET_DIFFICULTY", difficulty }),
+    []
+  );
 
   const { mines } = DIFFICULTIES[state.difficulty];
   const minesRemaining = mines - state.flagCount;
-
-  const DIFFICULTY_LABELS: Record<Difficulty, string> = {
-    beginner: "Beginner",
-    intermediate: "Intermediate",
-    expert: "Expert",
-  };
+  const isOver = state.status === "won" || state.status === "lost";
 
   return (
-    <div className="flex flex-col items-center gap-6 py-8">
-      <h1 className="text-3xl font-bold tracking-tight text-slate-800">
-        Minesweeper
-      </h1>
+    <div className="flex flex-col items-center gap-6 py-8 px-4">
+      {/* Title */}
+      <div className="text-center">
+        <h1 className="text-4xl font-extrabold tracking-widest text-slate-100 drop-shadow-lg uppercase">
+          💣 Minesweeper
+        </h1>
+        <p className="text-slate-400 text-sm mt-1 tracking-wider">
+          Right-click to flag · Click number to chord
+        </p>
+      </div>
 
-      {/* Difficulty selector */}
-      <div className="flex gap-2">
+      {/* Difficulty buttons */}
+      <div
+        className="flex rounded-xl overflow-hidden border border-slate-600 shadow-lg"
+        role="group"
+        aria-label="Difficulty"
+      >
         {(["beginner", "intermediate", "expert"] as Difficulty[]).map((d) => (
           <button
             key={d}
             onClick={() => handleSetDifficulty(d)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-5 py-2 text-sm font-semibold transition-colors focus:outline-none ${
               state.difficulty === d
-                ? "bg-slate-700 text-white"
-                : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                ? "bg-blue-600 text-white"
+                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
             }`}
           >
             {DIFFICULTY_LABELS[d]}
@@ -213,8 +218,16 @@ export default function Game() {
         ))}
       </div>
 
-      {/* Game panel */}
-      <div className="bg-slate-300 p-4 rounded-xl shadow-md">
+      {/* Game panel — 3-D bezel */}
+      <div
+        className="rounded-xl p-3 shadow-2xl"
+        style={{
+          background: "#9aa5b7",
+          boxShadow:
+            "0 8px 32px rgba(0,0,0,0.5), inset -4px -4px 0 #5a636f, inset 4px 4px 0 #d4dce8",
+          maxWidth: "100%",
+        }}
+      >
         <HUD
           minesRemaining={minesRemaining}
           elapsed={state.elapsed}
@@ -222,29 +235,50 @@ export default function Game() {
           isMouseDown={isMouseDown}
           onNewGame={handleNewGame}
         />
-        <Board
-          board={state.board}
-          losingCell={state.losingCell}
-          gameOver={state.status === "won" || state.status === "lost"}
-          onReveal={handleReveal}
-          onFlag={handleFlag}
-          onChord={handleChord}
-          onCellMouseDown={() => setIsMouseDown(true)}
-          onCellMouseUp={() => setIsMouseDown(false)}
-        />
+
+        {/* Board wrapper: inset border + horizontal scroll */}
+        <div
+          className="rounded overflow-auto"
+          style={{
+            boxShadow:
+              "inset 3px 3px 0 #5a636f, inset -3px -3px 0 #d4dce8",
+            padding: 3,
+            maxWidth: "calc(100vw - 3rem)",
+          }}
+        >
+          <Board
+            board={state.board}
+            losingCell={state.losingCell}
+            gameOver={isOver}
+            onReveal={handleReveal}
+            onFlag={handleFlag}
+            onChord={handleChord}
+            onCellMouseDown={() => setIsMouseDown(true)}
+            onCellMouseUp={() => setIsMouseDown(false)}
+          />
+        </div>
       </div>
 
       {/* Status banner */}
       {state.status === "won" && (
-        <div className="text-green-700 font-semibold text-lg animate-pulse">
-          You won! 🎉
+        <div className="rounded-xl bg-green-900/80 border border-green-500 text-green-300 font-bold text-lg px-8 py-3 shadow-lg text-center">
+          🎉 You cleared the field!
         </div>
       )}
       {state.status === "lost" && (
-        <div className="text-red-700 font-semibold text-lg">
-          Game over! 💀
+        <div className="rounded-xl bg-red-900/80 border border-red-500 text-red-300 font-bold text-lg px-8 py-3 shadow-lg text-center">
+          💀 Boom! Better luck next time.
         </div>
       )}
+
+      {/* Instructions footer */}
+      <p className="text-slate-500 text-xs text-center mt-2">
+        {isOver
+          ? "Click the face to play again."
+          : state.status === "idle"
+          ? "Click any cell to start."
+          : ""}
+      </p>
     </div>
   );
 }
